@@ -1229,6 +1229,40 @@ fn long_linkname_gnu() {
 }
 
 #[test]
+fn extension_entries_over_1_mib_are_rejected() {
+    const LIMIT: u64 = 1024 * 1024;
+    let archive = |entry_type: EntryType, size: u64| {
+        let mut b = Builder::new(Vec::<u8>::new());
+        let mut h = Header::new_gnu();
+        h.set_entry_type(entry_type);
+        h.set_size(size);
+        h.set_cksum();
+        b.append(&h, io::repeat(b'a').take(size)).unwrap();
+        let mut h = Header::new_gnu();
+        h.set_path("file").unwrap();
+        h.set_size(0);
+        h.set_cksum();
+        b.append(&h, io::empty()).unwrap();
+        b.into_inner().unwrap()
+    };
+
+    let contents = archive(EntryType::GNULongName, LIMIT);
+    let mut a = Archive::new(&contents[..]);
+    let e = a.entries().unwrap().next().unwrap().unwrap();
+    assert_eq!(e.path_bytes().len() as u64, LIMIT);
+
+    for entry_type in [
+        EntryType::GNULongName,
+        EntryType::GNULongLink,
+        EntryType::XHeader,
+    ] {
+        let contents = archive(entry_type, LIMIT + 1);
+        let mut a = Archive::new(&contents[..]);
+        assert!(a.entries().unwrap().next().unwrap().is_err());
+    }
+}
+
+#[test]
 fn linkname_literal() {
     for t in [tar::EntryType::Symlink, tar::EntryType::Link] {
         let mut b = Builder::new(Vec::<u8>::new());

@@ -415,7 +415,7 @@ impl<'a> EntriesFields<'a> {
                          the same member",
                     ));
                 }
-                gnu_longname = Some(EntryFields::from(entry).read_all()?);
+                gnu_longname = Some(read_extension(entry)?);
                 continue;
             }
 
@@ -426,7 +426,7 @@ impl<'a> EntriesFields<'a> {
                          the same member",
                     ));
                 }
-                gnu_longlink = Some(EntryFields::from(entry).read_all()?);
+                gnu_longlink = Some(read_extension(entry)?);
                 continue;
             }
 
@@ -437,7 +437,7 @@ impl<'a> EntriesFields<'a> {
                          the same member",
                     ));
                 }
-                pax_extensions = Some(EntryFields::from(entry).read_all()?);
+                pax_extensions = Some(read_extension(entry)?);
                 continue;
             }
 
@@ -609,6 +609,19 @@ impl<R: ?Sized + Seek> Seek for &ArchiveInner<R> {
         self.pos.set(pos);
         Ok(pos)
     }
+}
+
+/// The largest GNU long name, GNU long link or PAX extension entry that is
+/// read into memory. Go's archive/tar uses the same limit.
+const MAX_EXTENSION_SIZE: u64 = 1024 * 1024;
+
+/// Reads an extension entry, checking its size before any of it is read.
+fn read_extension(entry: Entry<'_, io::Empty>) -> io::Result<Vec<u8>> {
+    let mut fields = EntryFields::from(entry);
+    if fields.size > MAX_EXTENSION_SIZE {
+        return Err(other("extension entry larger than 1 MiB"));
+    }
+    fields.read_all()
 }
 
 /// Try to fill the buffer from the reader.
